@@ -23,7 +23,7 @@ DEF_COLUMN   	       EQU 600CH       ; endereço do comando para definir a colun
 DEF_COLOR              EQU 6014H       ; endereço do comando para definir a cor a usar
 DEF_PIXEL    	       EQU 6012H       ; endereço do comando para escrever um pixel
 DEF_8_PIXELS           EQU 601CH       ; endereço do comando para escrever em 8 pixels
-GET_PIXEL_COLOR        EQU 6010H       ; endereço do comando para obter a cor de um pixel
+GET_COLOR              EQU 6010H       ; endereço do comando para obter a cor de um pixel
 DELETE_WARNING     	   EQU 6040H       ; endereço do comando para apagar o aviso de nenhum cenário selecionado
 DELETE_SCREEN	 	   EQU 6002H       ; endereço do comando para apagar todos os pixels já desenhados
 SELECT_BACKGROUND_IMG  EQU 6042H       ; endereço do comando para selecionar uma imagem de fundo
@@ -325,7 +325,7 @@ spawn_pacman:
     MOV R4, DEF_OPEN_PAC_RIGHT          ; endereço da tabela que define o pacman
     CALL draw_object                    ; chama a função para desenhar um objeto neste caso, o pacman
 
-EI                                      ; ativar interrupções
+;EI                                      ; ativar interrupções
 
 main: ; ciclo principal
     CALL keyboard                       ; chama a função do teclado para indentificar as teclas pressionadas e executar os comandos às teclas associados
@@ -725,105 +725,138 @@ delete_rows:       	            ; desenha os pixels do objeto a partir da tabela
     RET
 
 ; *****************************************************************************************************************************
-; IS_OBJ_OVER_LIMIT - Testa se o objeto está a tentar ultrapassar aos limites do ecrã.
+; CHOSE_OBJECT_ACTION - Verifica qual ação que o objeto irá realizar
 ; Argumentos:	R1 - linha em que o objeto se encontra
 ;               R2 - coluna em que o objeto se encontra
 ;			    R4 - tabela que define o objeto
 ;               R7 - sentido do movimento do objeto na vertical (valor a somar à linha em cada movimento: +1 para baixo, -1 para cima)
 ;               R8 - sentido do movimento do objeto na horizontal (valor a somar à coluna em cada movimento: +1 para a direita, -1 para a esquerda)
 ;
-; Retorna: R0 - 1 ou 0 (True or False) dependendo se o objeto se encontra num limite ou não
+; Retorna: R0 - retorna o valor da ação que o objeto terá
+;               0 - movimento proíbido
+;               1 - pode mover
+;               2 - pode mover e encontra um candy
+;               3 - pode mover e encontra um ghost
 ; *****************************************************************************************************************************
-is_obj_over_limit:
+chose_object_action:
     PUSH    R1                  ; guarda os valores anteriores dos registos que são alterados nesta função
     PUSH    R2
+    PUSH    R3
+    PUSH    R4
     PUSH    R5
     PUSH    R6
     PUSH    R7
     PUSH    R8
     PUSH    R9
     PUSH    R10
-    PUSH    R11
     MOV R5, [R4]                ; obtém a altura objeto
-    MOV R6, [R4+2]              ; obtém a largura objeto
-    MOV R11, BLUE               ; guarda o valor ARGB dos limites                  
+    SUB R5, 1
+    MOV R6, [R4+2]              ; obtém a largura objeto     
+    SUB R6, 1          
     ADD R1, R7                  ; soma à linha o valor do eventual movimento
     ADD R2, R8                  ; soma à coluna o valor do eventual movimento
+    MOV R0, 1
+    MOV R10, BLUE
 
-check_top_pixels:
-    MOV R9, R6
-    SUB R9, 1
-    next_top_pixel:
-    MOV  [DEF_LINE], R1		    ; seleciona a linha
-	MOV  [DEF_COLUMN], R2	    ; seleciona a coluna
-	MOV  R10, [GET_PIXEL_COLOR]	; vê a cor do pixel na linha e coluna já selecionadas 
-    CMP R10, R11
-    JZ over_limit
-    ADD R2, 1
-    SUB R9, 1
-    JZ check_right_pixels
-    JMP next_top_pixel
+check_horizontal_pixels:
+    MOV R9, [R4+2]
+    next_horizontal_pixels:
+        CALL get_color_pixel
+        CMP R3, R10
+        JZ over_limit
+        CALL identify_action
+        ADD R1, R5
+        CALL get_color_pixel
+        CMP R3, R10
+        JZ over_limit
+        CALL identify_action
+        SUB R1, R5
+        SUB R9, 1
+        JZ check_vertical_pixels
+        ADD R2, 1
+        JMP next_horizontal_pixels
 
-check_right_pixels:
-    MOV R9, R5
-    SUB R9, 1
-    next_right_pixel:
-    MOV  [DEF_LINE], R1		    ; seleciona a linha
-	MOV  [DEF_COLUMN], R2	    ; seleciona a coluna
-	MOV  R10, [GET_PIXEL_COLOR]	; vê a cor do pixel na linha e coluna já selecionadas 
-    CMP R10, R11
-    JZ over_limit
-    ADD R1, 1
-    SUB R9, 1
-    JZ check_bottom_pixels
-    JMP next_right_pixel
-
-check_bottom_pixels:
-    MOV R9, R6
-    SUB R9, 1
-    next_bottom_pixel:
-    MOV  [DEF_LINE], R1		    ; seleciona a linha
-	MOV  [DEF_COLUMN], R2	    ; seleciona a coluna
-	MOV  R10, [GET_PIXEL_COLOR]	; vê a cor do pixel na linha e coluna já selecionadas 
-    CMP R10, R11
-    JZ over_limit
-    SUB R2, 1
-    SUB R9, 1
-    JZ check_left_pixels
-    JMP next_bottom_pixel
-
-check_left_pixels:
-    MOV R9, R5
-    SUB R9, 1
-    next_left_pixel:
-    MOV  [DEF_LINE], R1		    ; seleciona a linha
-	MOV  [DEF_COLUMN], R2	    ; seleciona a coluna
-	MOV  R10, [GET_PIXEL_COLOR]	; vê a cor do pixel na linha e coluna já selecionadas 
-    CMP R10, R11
-    JZ over_limit
-    SUB R1, 1
-    SUB R9, 1
-    JZ not_over_limits
-    JMP next_left_pixel    
+check_vertical_pixels:
+    MOV R9, [R4]
+    next_vertical_pixels:
+        CALL get_color_pixel
+        CMP R3, R10
+        JZ over_limit
+        CALL identify_action
+        SUB R2, R6
+        CALL get_color_pixel
+        CMP R3, R10
+        JZ over_limit
+        CALL identify_action
+        ADD R2, R6
+        SUB R9, 1
+        JZ not_over_limit
+        ADD R1, 1
+        JMP next_vertical_pixels    
 
 over_limit:
-    MOV R0, TRUE
+    MOV R0, 0
     JMP exit_limit_tests
 
-not_over_limits:
-    MOV R0, FALSE
+not_over_limit:
+    MOV R0, 1
     JMP exit_limit_tests
 
 exit_limit_tests:
-    POP     R11
     POP     R10
     POP     R9
     POP     R8
     POP     R7
     POP     R6
     POP     R5
+    POP     R4
+    POP     R3
     POP     R2
     POP     R1
+    RET
+; *****************************************************************************************************************************
+; GET_COLOR_PIXEL - Vê a cor do pixel na linha e coluna indicadas.
+; Argumentos:   R1 - linha
+;               R2 - coluna
+;
+; Retorna:      R3 - cor do pixel (em formato ARGB de 16 bits)
+; *****************************************************************************************************************************
+get_color_pixel:
+    MOV [DEF_LINE], R1
+    MOV [DEF_COLUMN], R2
+    MOV R3, [GET_COLOR]
+    RET 
+
+; *****************************************************************************************************************************
+; IDENTIFY_ACTION - Vê a cor do pixel na linha e coluna indicadas.
+; Argumentos:   R3 - cor do pixel
+;
+; Retorna:      R0 - valor da ação que o pacman vai fazer
+; *****************************************************************************************************************************
+identify_action:
+    PUSH R1
+    PUSH R2
+    MOV R1, GRN
+    MOV R2, RED
+    CMP R0, R1
+    JZ exit_chose_pacman_action
+    CMP R3, R1
+    JZ caught_ghost
+    CMP R3, R2
+    JZ caught_candy
+    JMP exit_chose_pacman_action
+
+caught_ghost:
+    MOV R0, 3
+    JMP exit_chose_pacman_action
+
+caught_candy:
+    MOV R0, 2
+    JMP exit_chose_pacman_action
+
+exit_chose_pacman_action:
+    POP R2
+    POP R1
     RET
 
 ; *****************************************************************************************************************************
@@ -842,10 +875,11 @@ move_object:
     PUSH R0                     ; guarda os valores anteriores dos registos que são alterados nesta função
     PUSH R6
     PUSH R9
+    PUSH R10
 
-    CALL is_obj_over_limit      ; chama a função que verifica se o objeto está a tentar ultrapassar algum limite com este movimento
-    CMP R0, TRUE                ; compara o retorno da função (R0) com o valor para TRUE
-    JZ end_movement             ; se a função retornar true então saltamos para end_movement pois o movimento é proíbido
+    CALL chose_object_action    ; chama a função que verifica se o objeto está a tentar ultrapassar algum limite com este movimento
+    CMP R0, 0                   ; compara o retorno da função (R0) com o valor 0
+    JZ end_movement             ; se a função retornar 0 então saltamos para end_movement pois o movimento é proíbido
     CALL delete_object          ; se não, apaga o objeto
     ADD R1, R7                  ; obtém nova linha
     ADD R2, R8                  ; obtém nova coluna
@@ -863,6 +897,75 @@ end_movement:
     POP R6
     POP R0
     RET
+
+; *****************************************************************************************************************************
+; MOVE_PACMAN - Incrementa ou decrementa o contador com base na tecla pressionada e atualiza o display
+; Argumentos:   R1 - linha
+;               R2 - coluna
+;               R3 - tabela que define o pacman
+;               R4 - tabela que define a animação do pacman
+;               R7 - sentido do movimento do objeto na vertical (valor a somar à linha em cada movimento: +1 para baixo, -1 para cima)
+;               R8 - sentido do movimento do objeto na horizontal (valor a somar à coluna em cada movimento: +1 para a direita, -1 para a esquerda)
+;
+; Retorna:      R1 - novo valor da linha, após o movimento
+;               R2 - novo valor da coluna, após o movimento
+; *****************************************************************************************************************************
+move_pacman:
+    PUSH R0                     ; guarda os valores anteriores dos registos que são alterados nesta função
+    PUSH R6
+    PUSH R9
+
+    CALL chose_object_action    ; chama a função que verifica se o pacman está a tentar ultrapassar algum limite com este movimento
+    CMP R0, 0                   ; compara o retorno da função (R0) com o valor 0
+    JZ end_pacman_movement      ; se a função retornar 0 então saltamos para end_movement pois o movimento é proíbido
+    CMP R0, 3
+    JNZ check_pacman_candy
+    CALL explosion
+    JMP new_position_pacman
+
+check_pacman_candy:
+    CMP R0, 2
+    JNZ new_position_pacman
+    CALL delete_candy
+    JMP new_position_pacman
+
+new_position_pacman:
+    CALL delete_object          ; se não, apaga o pacman
+    ADD R1, R7                  ; obtém nova linha
+    ADD R2, R8                  ; obtém nova coluna
+    PUSH R4                     ; guarda o valor de R4
+    MOV R4, R3                  ; move o valor de R3 para R4 para ser usado como argumento na função seguinte
+    CALL draw_object            ; desenha versão animada do pacman
+    CALL delay                  ; chama uma função para atrasar/abrandar o movimento
+    CALL delete_object          ; apaga a versão animada do pacman
+    POP R4                      ; recupera o valor de R4
+    CALL draw_object            ; desenha versão final do pacman
+    CALL delay                  ; chama uma função para atrasar/abrandar o movimento 
+
+
+end_pacman_movement:
+    POP R9                      ; recupera os valores anteriores dos registos modificados
+    POP R6
+    POP R0
+    RET
+
+; *****************************************************************************************************************************
+; DELETE_CANDY - Verifica qual o candy que o pacman apanhou e apaga-o
+;
+; *****************************************************************************************************************************
+delete_candy:
+PUSH R1
+POP R1
+RET
+
+; *****************************************************************************************************************************
+; EXPLOSTION - Verifica qual o candy que o pacman apanhou e apaga-o
+;
+; *****************************************************************************************************************************
+explosion:
+PUSH R1
+POP R1
+RET
 
 ; *****************************************************************************************************************************
 ; KEYBOARD - Verifica se uma tecla foi pressionada
@@ -1018,7 +1121,7 @@ move_down_right:
 
 move:
     MOV R3, DEF_PACMAN              ; move para R3 a tabela que define o pacman de boca fechada
-    CALL move_object                ; chama a função move_object
+    CALL move_pacman                ; chama a função move_pacman
     MOV [PAC_LIN], R1
     MOV [PAC_COL], R2
 
