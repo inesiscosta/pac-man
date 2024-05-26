@@ -287,12 +287,11 @@ DEF_CANDY_POSITIONS:
     WORD        CANDY4_LIN
     WORD        CANDY4_COL
 
-INVICIBILITY:         WORD 0            ; guarda o valor que mostra se o pacman é invencível ou não (1 invencível)
 REMAINING_CANDIES:    WORD 4            ; guarda o número de rebuçados em jogo
 NUM_GHOSTS:           WORD 0            ; guarda o número de fantasmas em jogo
 SCORE:                WORD 0            ; guarda a pontução do jogo
-COUNT_INT_0:          WORD 0            ; guarda o número de vezes que lidámos com a count_int_0 (resets a INES)
 COUNT_INT_1:          WORD 0            ; guarda o número de vezes que lidámos com a count_int_1 (resets a 5)
+COUNT_INT_2:          WORD 0            ; guarda o número de vezes que lidámos com a count_int_2 (resets a 5)
 
 ; Posições Atuais
 PAC_LIN:        WORD PAC_START_LIN      ; guarda a linha atual do pacman, inicializada a PAC_START_LIN
@@ -768,7 +767,7 @@ delete_rows:       	            ; desenha os pixels do objeto a partir da tabela
 
 
 ; *****************************************************************************************************************************
-; CHOSE_OBJECT_ACTION - Verifica qual ação que o objeto irá realizar
+; CHOOSE_OBJECT_ACTION - Verifica qual ação que o objeto irá realizar
 ; Argumentos:	R1 - linha em que o objeto se encontra
 ;               R2 - coluna em que o objeto se encontra
 ;			    R4 - tabela que define o objeto
@@ -785,7 +784,7 @@ delete_rows:       	            ; desenha os pixels do objeto a partir da tabela
 ;               6 - pode mover e encontra o ghost PINK
 ; NUNO ADICIONA OS MISSING COMENTÁRIOS A ESTA FUNÇÃO DEPOIS APAGA ESTE TEXTO
 ; *****************************************************************************************************************************
-chose_object_action:
+choose_object_action:
     PUSH R1                             ; guarda os valores anteriores dos registos que são alterados nesta função
     PUSH R2
     PUSH R3
@@ -844,15 +843,15 @@ check_vertical_pixels:
 
 over_limit:
     MOV R0, 0                           ; como o objeto está a tentar mover-se para cima de um limite guardamos 0 em R0 para indicar que o movimento é proíbido
-    JMP exit_chose_object_action        ; salta para o fim da rotina
+    JMP exit_choose_object_action        ; salta para o fim da rotina
 
 not_over_limit:
     CMP R0, 1
-    JGT exit_chose_object_action
+    JGT exit_choose_object_action
     MOV R0, 1                           ; guarda em R0 o valor 1 (código que indica que o pacman se pode movimentar e não vai collidir com nada)
-    JMP exit_chose_object_action        ; salta para o fim da rotina
+    JMP exit_choose_object_action        ; salta para o fim da rotina
 
-exit_chose_object_action:
+exit_choose_object_action:
     POP R10                             ; recupera os valores anteriores dos registos modificados
     POP R9
     POP R8
@@ -966,7 +965,7 @@ move_object:
     PUSH R6
     PUSH R9
 
-    CALL chose_object_action    ; chama a função que verifica que tipo de movimento o objeto está a tentar ultrapassar algum limite com este movimento
+    CALL choose_object_action   ; chama a função que verifica que tipo de movimento o objeto está a tentar ultrapassar algum limite com este movimento
     CMP R0, FALSE               ; compara o retorno da função (R0) com o valor para FALSE
     JZ end_movement             ; se a função retornar false, saltamos para end_movement pois o movimento é proíbido
     CALL delete_object          ; se não, apaga o objeto
@@ -1003,7 +1002,7 @@ move_pacman:
     PUSH R9
     PUSH R10
 
-    CALL chose_object_action    ; chama a função que verifica se o pacman está a tentar ultrapassar algum limite com este movimento
+    CALL choose_object_action   ; chama a função que verifica se o pacman está a tentar ultrapassar algum limite com este movimento
     CMP R0, 0                   ; compara o retorno da função (R0) com o valor 0
     JZ end_pacman_movement      ; se a função retornar 0 então saltamos para end_movement pois o movimento é proíbido
     CMP R0, 3
@@ -1111,62 +1110,23 @@ delete_candy:
         RET
 
 ; *****************************************************************************************************************************
-; EXPLOSTION - Verifica qual o fantasma que o pacman apanhou e vê se morre ou congela o fantasma
-; Argumentos:  R0 - O fantasma que o pacman encontrou
+; EXPLOSTION - Apaga o pacman e mostra uma explosão
+; Argumentos: R1 - linha do pacman
+;             R2 - coluna do pacman
+;             R4 - tabela que define o pacman
+;
 ; *****************************************************************************************************************************
 explosion:
-    PUSH R1
-    PUSH R2
-    PUSH R3
     PUSH R4
-    PUSH R5
-    MOV R5, [INVICIBILITY]
-    CMP R5, 0
-    JNZ kill_ghost
     CALL delete_object
     MOV R4, DEF_EXPLOSION
     CALL draw_object
-    CALL game_over
-kill_ghost:
-    CMP R0, 3
-    JZ kill_ghost_l_blue
-    CMP R0, 4
-    JZ kill_ghost_l_red
-    CMP R0, 5
-    JZ kill_ghost_orange
-    CMP R0, 6
-    JZ kill_ghost_pink
+    CALL delete_object
+    CALL end_game
+    JMP exit_explosion
 
-kill_ghost_l_blue:
-
-kill_ghost_l_red:
-
-kill_ghost_orange:
-
-kill_ghost_pink:
-
-    POP R5
+exit_explosion:
     POP R4
-    POP R3
-    POP R2
-    POP R1
-    RET
-
-; *****************************************************************************************************************************
-; VICTORY - ???
-; 
-; *****************************************************************************************************************************
-victory:
-    RET
-; *****************************************************************************************************************************
-; GAME_OVER - ???
-; 
-; *****************************************************************************************************************************
-game_over:
-    PUSH R1
-    ciclo:
-    ADD R1, 1
-    JMP ciclo
     RET
 
 ; *****************************************************************************************************************************
@@ -1476,6 +1436,13 @@ end_game:
     RET
 
 ; *****************************************************************************************************************************
+; VICTORY - ???
+; 
+; *****************************************************************************************************************************
+victory:
+    RET
+
+; *****************************************************************************************************************************
 ; DELAY - Introduz um delay
 ; *****************************************************************************************************************************
 delay:
@@ -1548,6 +1515,7 @@ ghost_cycle:
     PUSH R8
     PUSH R9
     PUSH R10
+    PUSH R11
 
     MOV R0, [int_0]             ; guarda em R0 o valor que indica a occurência da interrupção 0
     CMP R0, TRUE                ; se o valor for igual a TRUE (1), então a interrupção occureu
@@ -1558,14 +1526,14 @@ ghost_cycle:
         CMP R3, 0                           ; verifica se já vimos todos os ghosts
         JZ exit_ghost_cycle                 ; se já, saltamos para o fim da rotina
         check_aliveness2:
-            MOV R9, R8                      ; cria uma cópia de R8 que será editada
+            MOV R9, R0                      ; cria uma cópia de R0 que será editada
             MOV R1, ALIVE_GHOSTS            ; endereço da tabela alive_ghosts
             SHL R9, 1                       ; multiplica o valor de R9 por dois (2 porque WORD)
             ADD R9, R1                      ; endereço do valor indentificador da "aliveness" do fantasma em questão
             MOV R7, [R9]                    ; R7 guarda o valor indicador de se o fantasma está vivo
             CMP R7, 1                       ; verifica se o fantasma está vivo
             JNZ next_ghost2                 ; se não estiver, vamos ver o próximo ghost
-            MOV R7, R8                      ; se estiver vivo, cria uma cópia de R8 que será alterada
+            MOV R7, R0                      ; se estiver vivo, cria uma cópia de R0 que será alterada
             MOV R4, 6                       ; guarda em R4 o número 3 que é o que queremos multiplicar
             MUL R7, R4                      ; obtemos a posição relativa ao topo da tabela GHOST_POS da linha do fantasma em causa
             MOV R4, GHOST_POS               ; endereço da tabela ghost_pos
@@ -1573,21 +1541,23 @@ ghost_cycle:
             MOV R10, R7                     ; guardamos uma cópia do endereço da linha
             MOV R1, [R7]                    ; linha do fantasma em causa
             ADD R7, 2                       ; endereço da coluna
+            MOV R11, R7                     ; guardamos uma cópia do endereço da coluna
             MOV R2, [R7]                    ; coluna do fantasma em causa
             ADD R7, 2                       ; endereço da tabela que define o fantasma 
             MOV R4, [R7]                    ; guarda o endereço da tabela que define o fantasma em R4
             CALL animate_ghost              ; chama a função que anima o fantasma
             MOV [R10], R1                   ; atualiza a memória com a nova linha atual do fantasma (pós movimento)
-            MOV [R7], R2                    ; atualiza a memória com a nova coluna atual do fantasma (pós movimento)
+            MOV [R11], R2                    ; atualiza a memória com a nova coluna atual do fantasma (pós movimento)
             INC R3                          ; incrementa o número de alive ghosts
         next_ghost2:
-            INC R8                          ; próximo fantasma
+            INC R0                          ; próximo fantasma
             DEC R3                          ; decrementa o valor de R3 para avançar o for loop
             JMP for_max_ghosts2             ; salta para o inicio do "for" loop
     
     exit_ghost_cycle:
         MOV R0, FALSE           ; guarda em R0 o valor FALSE (0)
         MOV [int_0], R0         ; repõem o indicador de occurência da interrupção a 0 uma vez que já lidámos com ela
+        POP R11
         POP R10
         POP R9
         POP R8
@@ -1605,7 +1575,7 @@ ghost_cycle:
 ; ANIMATE_GHOST - Anima o fantasma.
 ; Argumentos:   R1 - linha em que se encontra o fantasma
 ;               R2 - coluna em que se encontra o fantasma
-;               R4 - tabela que define o fantasma
+;               R4 - endereço da tabela que define o fantasma
 ;
 ;
 ; *****************************************************************************************************************************
