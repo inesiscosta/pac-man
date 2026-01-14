@@ -58,4 +58,4 @@ You need Java with JavaFX.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2024 Inês Costa, Marcos Machado and Nuno Antunes
